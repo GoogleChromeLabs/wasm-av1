@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>AV1 Wasm decoder demo</title>
+  </head>
+  <body style="{ font-face: sans-serif; }">
+    <input type="file" id="files" name="files[]"/>
+    <br/>
+    <canvas id="view" width="1280px" height="720px"></canvas>
+    <script src="decode-av1.js"></script>
+    <script>
+        let wasm_loaded = false;
+        let av1_decoder = null;
+        let video_running = false;
+        let data_source = null;
+        let rgb_image = null;
+        let start_time = 0.0;
+        const frame_time = 1000.0 / 24.0;   // milliseconds per frame. Demo is all 24fps video
+        let frame_count = 0;
+        let max_run = 0.0;
+        let WIDTH = 640;
+        let HEIGHT = 360;
+        const measure = true;
+
+        Module.onRuntimeInitialized = function() {
+            wasm_loaded = true;
+        }
+
+        function setup() {
+            function update() {
+                if (wasm_loaded) {
+                    handle_tick();
+                }
+                requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        }
+        window.onload = setup;
+        if (measure) { var yuv_converts = 0, draws = 0, runs = 0, frames = 0; }
+        function show_frame(af) {
+            if (rgb_image != 0) {
+                // Convert The 16-bit YUV to 8-bit RGB
+                let buf = Module._AVX_Video_Frame_get_buffer(af);
+                if (measure) { var t1 = performance.now(); }
+                Module._AVX_YUV_to_RGB(rgb_image, buf, WIDTH, HEIGHT);
+                if (measure) { var t2 = performance.now(); }
+                // Paint the image onto the canvas
+                drawImageToCanvas(new Uint8Array(Module.HEAPU8.buffer, rgb_image, 3 * WIDTH * HEIGHT), WIDTH, HEIGHT);
+                if (measure) {
+                    var t3 = performance.now();
+                    frames++;
+                    yuv_converts += (t2 - t1);
+                    draws += (t3 - t2);
+                }
+            }
+        }
+        function handle_tick() {
+            let af = 0;
+
+            if (video_running === false) {
+                return;
+            }
+            if (Module._AVX_Decoder_video_finished(av1_decoder)) {
+                video_running = false;
+                Module._DS_close(data_source);
+                Module._AVX_Decoder_destroy(av1_decoder);
+                if (measure) {
+                    console.log(frames + " frames: " + "YUV->RGB " + yuv_converts + "ms, draw " + draws + "ms decode " + runs + "ms");
+                    console.log("Max run is " + max_run + "ms");
+                }
+                return;
+            }
+            // Check if elapsed time means we should show a frame (poor mans sync)
+            if ((start_time + frame_count * frame_time) > performance.now()) {
+                return;
+            }
+            if ((af = Module._AVX_Decoder_get_frame(av1_decoder)) != 0) {
+                frame_count++;
+                show_frame(af);
+            }
+            if (measure) { var t4 = performance.now(); }
+            Module._AVX_Decoder_run(av1_decoder);
+            if (measure) { 
+                var t5 = performance.now();
+                runs += (t5 - t4);
+                if (max_run < (t5 - t4)) {
+                    max_run = t5 - t4;
+                }
+            }
+        }
+        var fileAsArray = undefined;
+        function handleFileSelect(evt) {
+            var files = evt.target.files; // FileList object
+
+            // files is a FileList of File objects. grab the name.
+            if (files[0]) {
+                var f = files[0];
+
+                var reader = new FileReader();
+                // Closure to capture the file information.
+                reader.onload = (function(theFile) {
+                    return function(e) {
+                        fileAsArray = e.target.result;
+                        if (fileAsArray.byteLength > 0) {
+                            start_playback();
+                        }
+                    };
+                })(f);
+
+                // Read in the image file as an array buffer.
+                reader.readAsArrayBuffer(f);
+            }
+        }
+        function start_playback() {
+            // Allocate a data source, get some memory from Wasm land and copy
+            // the source video data into it, then kick off the decode
+            av1_decoder = Module._AVX_Decoder_new();
+            data_source = Module._DS_open();
+            let comp_mem = Module._malloc(fileAsArray.byteLength);
+            Module.HEAPU8.set(new Uint8Array(fileAsArray), comp_mem);
+            Module._DS_set_blob(data_source, comp_mem, fileAsArray.byteLength);
+            Module._AVX_Decoder_set_source(av1_decoder, data_source);
+            // Run the decoder at the start to read the headers at least
+            Module._AVX_Decoder_run(av1_decoder);
+            video_running = true;
+            start_time = performance.now();
+            // Get the width and height of the video so we can resize our canvas appropriately
+            WIDTH = Module._AVX_Decoder_get_width(av1_decoder);
+            HEIGHT = Module._AVX_Decoder_get_height(av1_decoder);
+            // Allocate an RGB buffer to convert the YUV frames into for display on the canvas
+            rgb_image = Module._malloc(3 * WIDTH * HEIGHT);
+        }
+        document.getElementById('files').addEventListener('change', handleFileSelect, false);
+    </script>
+    <script id="vs" type="vertex-shader">
+      attribute vec2 aVertex;
+      attribute vec2 aTex;
+      varying vec2 vTex;
+      void main() {
+        gl_Position = vec4(aVertex, 0.0, 1.0);
+        vTex = aTex;
+      }
+    </script>
+    <script id="fs" type="fragment-shader">
+      precision mediump float;
+      uniform sampler2D uTexture;
+      varying vec2 vTex;
+      void main() {
+        gl_FragColor = texture2D(uTexture, vTex);
+      }
+    </script>
+    <script src="draw-image.js"></script>
+  </body>
+</html>
