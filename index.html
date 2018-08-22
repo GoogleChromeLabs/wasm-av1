@@ -2,9 +2,12 @@
 <html>
   <head>
     <title>AV1 Wasm decoder demo</title>
+    <style>
+      body { font-family: sans-serif; }
+    </style>
   </head>
-  <body style="{ font-face: sans-serif; }">
-    <input type="file" id="files" name="files[]"/>
+  <body>
+    <p>Show 24fps AV1 video in an IVF file</p> <input type="file" id="files" name="files[]"/>
     <br/>
     <canvas id="view" width="1280px" height="720px"></canvas>
     <script src="decode-av1.js"></script>
