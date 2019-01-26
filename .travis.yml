@@ -1,9 +1,16 @@
 language: c
 
-compiler:
- - gcc
- - clang
-
-script:
- - make
- - make testavx
+jobs:
+  include
+  - name: "Make (GCC)"
+    compiler: gcc
+    script: make
+  - name: "Make (Clang)"
+    compiler: clang
+    script: make
+  - name: "Make testavx (GCC)"
+    compiler: gcc
+    script: make testavx
+  - name: "Make testavx (Clang)"
+    compiler: clang
+    script: make testavx
