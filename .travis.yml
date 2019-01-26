@@ -1,7 +1,16 @@
 language: c
 
+install:
+    - wget https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/nasm-2.14.02.tar.xz
+    - tar -xvf nasm-2.14.02.tar.xz
+    - cd nasm-2.14.02
+    - ./configure
+    - make
+    - sudo make install
+    - nasm --version
+
 jobs:
-  include
+  include:
   - name: "Make (GCC)"
     compiler: gcc
     script: make
