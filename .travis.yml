@@ -10,6 +10,8 @@ install:
     - nasm --version
     - cd ..
 
+before_script: git submodule update --init --recursive
+
 jobs:
   include:
   - name: "Make (GCC)"
