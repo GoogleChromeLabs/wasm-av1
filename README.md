@@ -1,4 +1,4 @@
-# AV1 video decoder in WASM demo
+# AV1 video decoder in WASM demo  [![Travis Build Status](https://travis-ci.org/GoogleChromeLabs/wasm-av1.svg?branch=master)](https://travis-ci.org/GoogleChromeLabs/wasm-av1)
 
 In-browser AV1 video decoder demo for experimenting with codecs.
 
